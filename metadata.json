@@ -1,0 +1,6 @@
+{
+  "name": "Messenger",
+  "description": "Ứng dụng nhắn tin realtime hiện đại phong cách Messenger & Discord.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
