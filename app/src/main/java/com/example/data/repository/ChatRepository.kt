@@ -117,6 +117,18 @@ class ChatRepository(private val db: AppDatabase) {
         notificationDao.deleteNotification(id)
     }
 
+    suspend fun removeMemberFromConversation(convId: String, userId: String) = withContext(Dispatchers.IO) {
+        conversationDao.removeMember(convId, userId)
+    }
+
+    suspend fun updateGroupDetails(convId: String, newTitle: String, newAvatarUrl: String?) = withContext(Dispatchers.IO) {
+        conversationDao.updateGroupDetails(convId, newTitle, newAvatarUrl)
+    }
+
+    suspend fun insertMembers(memberships: List<ConversationMemberEntity>) = withContext(Dispatchers.IO) {
+        conversationDao.insertMembers(memberships)
+    }
+
     suspend fun seedInitialDataIfEmpty(currentUserId: String, currentUserName: String, currentUserAvatar: String) = withContext(Dispatchers.IO) {
         val existingUsers = userDao.getAllUsers().firstOrNull()
         if (existingUsers.isNullOrEmpty()) {
@@ -189,7 +201,8 @@ class ChatRepository(private val db: AppDatabase) {
                 isGroup = true,
                 createdAt = System.currentTimeMillis() - 72 * 60 * 60 * 1000,
                 lastMessageText = "Đã fix xong bug realtime socket rồi nha ae",
-                lastMessageTime = System.currentTimeMillis() - 5 * 60 * 1000
+                lastMessageTime = System.currentTimeMillis() - 5 * 60 * 1000,
+                avatarUrl = "https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?auto=format&fit=crop&w=150&q=80"
             )
 
             conversationDao.insertConversation(convTien)

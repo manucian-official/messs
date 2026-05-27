@@ -47,6 +47,12 @@ interface ConversationDao {
         WHERE conversation_members.conversationId = :convId
     """)
     fun getMembersOfConversation(convId: String): Flow<List<UserEntity>>
+
+    @Query("DELETE FROM conversation_members WHERE conversationId = :convId AND userId = :userId")
+    suspend fun removeMember(convId: String, userId: String)
+
+    @Query("UPDATE conversations SET title = :newTitle, avatarUrl = :newAvatarUrl WHERE id = :id")
+    suspend fun updateGroupDetails(id: String, newTitle: String, newAvatarUrl: String?)
 }
 
 @Dao

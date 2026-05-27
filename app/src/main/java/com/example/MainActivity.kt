@@ -52,6 +52,7 @@ class MainActivity : ComponentActivity() {
                 val conversations by chatViewModel.conversations.collectAsStateWithLifecycle()
                 val activeConversation by chatViewModel.activeConversation.collectAsStateWithLifecycle()
                 val activeMessages by chatViewModel.activeMessages.collectAsStateWithLifecycle()
+                val activeMembers by chatViewModel.activeMembers.collectAsStateWithLifecycle()
                 val allUsers by chatViewModel.allUsers.collectAsStateWithLifecycle()
                 val notifications by chatViewModel.notifications.collectAsStateWithLifecycle()
                 val isTyping by chatViewModel.isTyping.collectAsStateWithLifecycle()
@@ -78,7 +79,9 @@ class MainActivity : ComponentActivity() {
                                 currentUser = currentUser!!,
                                 isTyping = isTyping,
                                 replyingTo = replyingToMessage,
-                                onBack = { chatViewModel.selectOrAddConversation("", false, emptyList()) }, // goes back
+                                members = activeMembers,
+                                allUsers = allUsers,
+                                onBack = { chatViewModel.deselectConversation() }, // goes back beautifully
                                 onSendMessage = { text, reply, attachments ->
                                     chatViewModel.sendMessage(text, reply, attachments)
                                 },
@@ -87,6 +90,9 @@ class MainActivity : ComponentActivity() {
                                 onDeleteMessage = { msg -> chatViewModel.deleteMessage(msg) },
                                 onAddReaction = { id, emoji -> chatViewModel.addReaction(id, emoji) },
                                 onCancelReply = { chatViewModel.setReplyingTo(null) },
+                                onUpdateGroup = { name, avatar -> chatViewModel.updateGroupSettings(activeConversation!!.id, name, avatar) },
+                                onInviteMembers = { users -> chatViewModel.inviteMembersToGroup(activeConversation!!.id, users) },
+                                onLeaveGroup = { chatViewModel.leaveGroup(activeConversation!!.id) },
                                 modifier = appModifier
                             )
                         }
@@ -98,8 +104,8 @@ class MainActivity : ComponentActivity() {
                                 currentUser = currentUser!!,
                                 allUsers = allUsers,
                                 onConversationSelected = { conv -> chatViewModel.selectConversation(conv) },
-                                onCreateGroup = { title, selectedMembers ->
-                                    chatViewModel.selectOrAddConversation(title, true, selectedMembers)
+                                onCreateGroup = { title, avatarUrl, selectedMembers ->
+                                    chatViewModel.selectOrAddConversation(title, true, selectedMembers, avatarUrl)
                                 },
                                 onLogout = { chatViewModel.logout() },
                                 onMarkNotifRead = { id -> chatViewModel.markNotificationAsRead(id) },

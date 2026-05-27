@@ -91,6 +91,12 @@ class ChatViewModel(private val repository: ChatRepository) : ViewModel() {
         _activeMessages.value = emptyList()
     }
 
+    fun deselectConversation() {
+        _activeConversation.value = null
+        _activeMessages.value = emptyList()
+        _activeMembers.value = emptyList()
+    }
+
     fun selectConversation(conversation: ConversationEntity) {
         _activeConversation.value = conversation
         
@@ -184,7 +190,7 @@ class ChatViewModel(private val repository: ChatRepository) : ViewModel() {
         }
     }
 
-    fun selectOrAddConversation(title: String, isGroup: Boolean, selectedUsers: List<UserEntity>) {
+    fun selectOrAddConversation(title: String, isGroup: Boolean, selectedUsers: List<UserEntity>, avatarUrl: String? = null) {
         viewModelScope.launch {
             val convId = "conv_" + UUID.randomUUID().toString().take(6)
             val newConv = ConversationEntity(
@@ -193,7 +199,8 @@ class ChatViewModel(private val repository: ChatRepository) : ViewModel() {
                 isGroup = isGroup,
                 createdAt = System.currentTimeMillis(),
                 lastMessageText = "Cuộc hội thoại mới đã được khởi tạo",
-                lastMessageTime = System.currentTimeMillis()
+                lastMessageTime = System.currentTimeMillis(),
+                avatarUrl = avatarUrl ?: if (isGroup) "https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?auto=format&fit=crop&w=150&q=80" else null
             )
             
             val memberIds = selectedUsers.map { it.id }.toMutableList()
@@ -202,6 +209,74 @@ class ChatViewModel(private val repository: ChatRepository) : ViewModel() {
             repository.createConversation(newConv, memberIds)
             _activeConversation.value = newConv
             selectConversation(newConv)
+        }
+    }
+
+    fun leaveGroup(convId: String) {
+        val user = _currentUser.value ?: return
+        viewModelScope.launch {
+            val announcement = MessageEntity(
+                id = UUID.randomUUID().toString(),
+                conversationId = convId,
+                senderId = "system",
+                senderName = "Hệ thống",
+                senderAvatar = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=150&q=80",
+                text = "${user.displayName} đã rời khỏi nhóm chat",
+                timestamp = System.currentTimeMillis()
+            )
+            repository.insertMessage(announcement)
+            repository.removeMemberFromConversation(convId, user.id)
+
+            _activeConversation.value = null
+            _activeMessages.value = emptyList()
+            _activeMembers.value = emptyList()
+        }
+    }
+
+    fun inviteMembersToGroup(convId: String, invitedUsers: List<UserEntity>) {
+        if (invitedUsers.isEmpty()) return
+        val user = _currentUser.value ?: return
+        viewModelScope.launch {
+            val memberships = invitedUsers.map {
+                ConversationMemberEntity(convId, it.id)
+            }
+            repository.insertMembers(memberships)
+
+            val namesString = invitedUsers.joinToString(", ") { it.displayName }
+            val announcement = MessageEntity(
+                id = UUID.randomUUID().toString(),
+                conversationId = convId,
+                senderId = "system",
+                senderName = "Hệ thống",
+                senderAvatar = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=150&q=80",
+                text = "${user.displayName} đã thêm $namesString vào nhóm",
+                timestamp = System.currentTimeMillis()
+            )
+            repository.insertMessage(announcement)
+        }
+    }
+
+    fun updateGroupSettings(convId: String, newName: String, newAvatarUrl: String) {
+        val user = _currentUser.value ?: return
+        viewModelScope.launch {
+            repository.updateGroupDetails(convId, newName, newAvatarUrl)
+            
+            val announcement = MessageEntity(
+                id = UUID.randomUUID().toString(),
+                conversationId = convId,
+                senderId = "system",
+                senderName = "Hệ thống",
+                senderAvatar = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=150&q=80",
+                text = "${user.displayName} đã cập nhật thông tin nhóm thành \"$newName\"",
+                timestamp = System.currentTimeMillis()
+            )
+            repository.insertMessage(announcement)
+
+            // Reload exact active snapshot configuration in view state in real-time
+            val updatedConfig = repository.conversations.firstOrNull()?.find { it.id == convId }
+            if (updatedConfig != null) {
+                _activeConversation.value = updatedConfig
+            }
         }
     }
 

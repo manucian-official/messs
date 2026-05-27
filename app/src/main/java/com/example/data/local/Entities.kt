@@ -20,7 +20,8 @@ data class ConversationEntity(
     val isGroup: Boolean,
     val createdAt: Long,
     val lastMessageText: String,
-    val lastMessageTime: Long
+    val lastMessageTime: Long,
+    val avatarUrl: String? = null
 )
 
 @Entity(tableName = "conversation_members", primaryKeys = ["conversationId", "userId"])

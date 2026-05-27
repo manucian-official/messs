@@ -41,7 +41,7 @@ fun HomeScreen(
     currentUser: UserEntity,
     allUsers: List<UserEntity>,
     onConversationSelected: (ConversationEntity) -> Unit,
-    onCreateGroup: (title: String, members: List<UserEntity>) -> Unit,
+    onCreateGroup: (title: String, avatarUrl: String, members: List<UserEntity>) -> Unit,
     onLogout: () -> Unit,
     onMarkNotifRead: (String) -> Unit,
     onClearNotif: (String) -> Unit,
@@ -153,8 +153,8 @@ fun HomeScreen(
                     )
                     1 -> CreateGroupTab(
                         allUsers = allUsers.filter { it.id != currentUser.id },
-                        onCreateGroup = { name, users ->
-                            onCreateGroup(name, users)
+                        onCreateGroup = { name, avatarUrl, users ->
+                            onCreateGroup(name, avatarUrl, users)
                             selectedTab = 0 // return to chats
                         }
                     )
@@ -390,7 +390,7 @@ fun ChatsTab(
             ) {
                 items(filteredConversations) { conv ->
                     val resolvedAvatar = if (conv.isGroup) {
-                        "https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?auto=format&fit=crop&w=150&q=80"
+                        conv.avatarUrl ?: "https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?auto=format&fit=crop&w=150&q=80"
                     } else {
                         allUsers.find { it.displayName == conv.title }?.avatarUrl ?: ""
                     }
@@ -489,9 +489,16 @@ fun ChatsTab(
 @Composable
 fun CreateGroupTab(
     allUsers: List<UserEntity>,
-    onCreateGroup: (String, List<UserEntity>) -> Unit
+    onCreateGroup: (String, String, List<UserEntity>) -> Unit
 ) {
     var groupName by remember { mutableStateOf("") }
+    val avatarPresets = listOf(
+        "https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?auto=format&fit=crop&w=150&q=80" to "Work",
+        "https://images.unsplash.com/photo-1549692520-acc6669e2f0c?auto=format&fit=crop&w=150&q=80" to "Dev",
+        "https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?auto=format&fit=crop&w=150&q=80" to "Social",
+        "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=150&q=80" to "Creative"
+    )
+    var selectedAvatarUrl by remember { mutableStateOf(avatarPresets.first().first) }
     val selectedMembers = remember { mutableStateListOf<UserEntity>() }
     var errorMsg by remember { mutableStateOf("") }
 
@@ -523,6 +530,40 @@ fun CreateGroupTab(
             ),
             modifier = Modifier.fillMaxWidth()
         )
+
+        Text(
+            text = "Ảnh đại diện nhóm",
+            fontSize = 12.sp,
+            color = TextSecondary,
+            fontWeight = FontWeight.Bold
+        )
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            avatarPresets.forEach { (url, label) ->
+                val isSelected = selectedAvatarUrl == url
+                Box(
+                    modifier = Modifier
+                        .size(54.dp)
+                        .clip(CircleShape)
+                        .border(
+                            width = if (isSelected) 3.dp else 1.dp,
+                            color = if (isSelected) AccentPurple else DarkBorder,
+                            shape = CircleShape
+                        )
+                        .clickable { selectedAvatarUrl = url }
+                ) {
+                    UserAvatar(
+                        avatarUrl = url,
+                        size = 54.dp,
+                        isOnline = false,
+                        showStatus = false
+                    )
+                }
+            }
+        }
 
         Text(
             text = "Thêm thành viên vào phòng (${selectedMembers.size})",
@@ -583,7 +624,7 @@ fun CreateGroupTab(
                 } else if (selectedMembers.isEmpty()) {
                     errorMsg = "Chọn ít nhất 1 thành viên!"
                 } else {
-                    onCreateGroup(groupName, selectedMembers.toList())
+                    onCreateGroup(groupName, selectedAvatarUrl, selectedMembers.toList())
                 }
             },
             modifier = Modifier

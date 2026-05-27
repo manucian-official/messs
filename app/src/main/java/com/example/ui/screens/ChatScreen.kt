@@ -47,6 +47,8 @@ fun ChatScreen(
     currentUser: UserEntity,
     isTyping: Boolean,
     replyingTo: MessageEntity?,
+    members: List<UserEntity> = emptyList(),
+    allUsers: List<UserEntity> = emptyList(),
     onBack: () -> Unit,
     onSendMessage: (String, replyTo: MessageEntity?, attachments: List<AttachmentEntity>) -> Unit,
     onPinMessage: (MessageEntity) -> Unit,
@@ -54,6 +56,9 @@ fun ChatScreen(
     onDeleteMessage: (MessageEntity) -> Unit,
     onAddReaction: (messageId: String, emoji: String) -> Unit,
     onCancelReply: () -> Unit,
+    onUpdateGroup: (title: String, avatarUrl: String) -> Unit = { _, _ -> },
+    onInviteMembers: (List<UserEntity>) -> Unit = {},
+    onLeaveGroup: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -66,6 +71,8 @@ fun ChatScreen(
     // Bottom Sheet message settings controllers
     var activeContextMessage by remember { mutableStateOf<MessageEntity?>(null) }
     var showActionMenu by remember { mutableStateOf(false) }
+
+    var showGroupDetailsDialog by remember { mutableStateOf(false) }
 
     // Scroll automatically when list receives new messages or user keyboard enters
     LaunchedEffect(messages.size, isTyping) {
@@ -82,10 +89,14 @@ fun ChatScreen(
                 title = {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable { /* Toggling detail */ }
+                        modifier = Modifier.clickable {
+                            if (conversation.isGroup) {
+                                showGroupDetailsDialog = true
+                            }
+                        }
                     ) {
                         val avatarUrl = if (conversation.isGroup) {
-                            "https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?auto=format&fit=crop&w=150&q=80"
+                            conversation.avatarUrl ?: "https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?auto=format&fit=crop&w=150&q=80"
                         } else {
                             // Opposing avatar placeholder derived
                             "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80"
@@ -105,7 +116,7 @@ fun ChatScreen(
                                 color = Color.White
                             )
                             Text(
-                                text = if (conversation.isGroup) "Nhóm của Đội Ngũ Tech" else "Đang hoạt động",
+                                text = if (conversation.isGroup) "Chi tiết nhóm ℹ️" else "Đang hoạt động",
                                 fontSize = 11.sp,
                                 color = StatusOnline
                             )
@@ -194,39 +205,72 @@ fun ChatScreen(
                 item { Spacer(modifier = Modifier.height(10.dp)) }
 
                 items(messages) { msg ->
-                    val isMe = msg.senderId == currentUser.id
-                    val isMsgEdited = msg.isEdited
-                    val isMsgDeleted = msg.isDeleted
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = if (isMe) Arrangement.End else Arrangement.Start,
-                        verticalAlignment = Alignment.Bottom
-                    ) {
-                        if (!isMe) {
-                            UserAvatar(
-                                avatarUrl = msg.senderAvatar,
-                                size = 32.dp,
-                                isOnline = false,
-                                showStatus = false
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                        }
-
-                        Column(
-                            horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
+                    if (msg.senderId == "system") {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            // Sub title sender nickname inside group
-                            if (conversation.isGroup && !isMe) {
-                                Text(
-                                    text = msg.senderName,
-                                    fontSize = 11.sp,
-                                    color = TextSecondary,
-                                    modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = DarkSurfaceVariant.copy(alpha = 0.5f)),
+                                shape = CircleShape,
+                                modifier = Modifier.border(0.5.dp, DarkBorder.copy(alpha = 0.5f), CircleShape)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Info,
+                                        contentDescription = "System message",
+                                        tint = AccentCyan,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = msg.text,
+                                        color = TextSecondary,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        val isMe = msg.senderId == currentUser.id
+                        val isMsgEdited = msg.isEdited
+                        val isMsgDeleted = msg.isDeleted
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = if (isMe) Arrangement.End else Arrangement.Start,
+                            verticalAlignment = Alignment.Bottom
+                        ) {
+                            if (!isMe) {
+                                UserAvatar(
+                                    avatarUrl = msg.senderAvatar,
+                                    size = 32.dp,
+                                    isOnline = false,
+                                    showStatus = false
                                 )
+                                Spacer(modifier = Modifier.width(8.dp))
                             }
 
-                            // Reply Reference preview inside bubble
+                            Column(
+                                horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
+                            ) {
+                                // Sub title sender nickname inside group
+                                if (conversation.isGroup && !isMe) {
+                                    Text(
+                                        text = msg.senderName,
+                                        fontSize = 11.sp,
+                                        color = TextSecondary,
+                                        modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
+                                    )
+                                }
+
+                                // Reply Reference preview inside bubble
                             if (msg.replyToMessageId != null && msg.replyToMessageText != null) {
                                 Box(
                                     modifier = Modifier
@@ -389,6 +433,7 @@ fun ChatScreen(
                         }
                     }
                 }
+            }
 
                 if (isTyping) {
                     item {
@@ -691,6 +736,292 @@ fun ChatScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Text("Thu hồi tin nhắn", color = ErrorRadical, fontWeight = FontWeight.Bold)
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showGroupDetailsDialog && conversation.isGroup) {
+        Dialog(onDismissRequest = { showGroupDetailsDialog = false }) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp, horizontal = 4.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .border(1.dp, DarkBorder, RoundedCornerShape(24.dp)),
+                color = DarkBackground
+            ) {
+                var editedTitle by remember(conversation.title) { mutableStateOf(conversation.title) }
+                val presets = listOf(
+                    "https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?auto=format&fit=crop&w=150&q=80",
+                    "https://images.unsplash.com/photo-1549692520-acc6669e2f0c?auto=format&fit=crop&w=150&q=80",
+                    "https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?auto=format&fit=crop&w=150&q=80",
+                    "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=150&q=80"
+                )
+                var selectedAvatar by remember(conversation.avatarUrl) { mutableStateOf(conversation.avatarUrl ?: presets.first()) }
+                
+                var inviteTabActive by remember { mutableStateOf(false) }
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Thông tin nhóm",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp,
+                            color = Color.White
+                        )
+                        IconButton(onClick = { showGroupDetailsDialog = false }) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = TextPrimary)
+                        }
+                    }
+
+                    // Large Avatar with preset selectors
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        UserAvatar(
+                            avatarUrl = selectedAvatar,
+                            size = 72.dp,
+                            isOnline = false,
+                            showStatus = false
+                        )
+                        
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            presets.forEach { presetUrl ->
+                                val isSelected = selectedAvatar == presetUrl
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .border(
+                                            width = if (isSelected) 2.5.dp else 0.dp,
+                                            color = if (isSelected) AccentCyan else Color.Transparent,
+                                            shape = CircleShape
+                                        )
+                                        .clickable { selectedAvatar = presetUrl }
+                                ) {
+                                    UserAvatar(
+                                        presetUrl,
+                                        size = 36.dp,
+                                        isOnline = false,
+                                        showStatus = false
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Rename text input
+                    OutlinedTextField(
+                        value = editedTitle,
+                        onValueChange = { editedTitle = it },
+                        label = { Text("Tên nhóm chat", color = TextSecondary) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary,
+                            focusedBorderColor = AccentCyan,
+                            unfocusedBorderColor = DarkBorder,
+                            focusedLabelColor = AccentCyan
+                        ),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Button(
+                        onClick = {
+                            if (editedTitle.isNotBlank()) {
+                                onUpdateGroup(editedTitle, selectedAvatar)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(42.dp),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("Cập nhật thông tin", color = Color(0xFF003062), fontWeight = FontWeight.Bold)
+                    }
+
+                    // Tab selector for Members Vs Invite Users
+                    TabRow(
+                        selectedTabIndex = if (inviteTabActive) 1 else 0,
+                        containerColor = DarkSurface,
+                        contentColor = AccentCyan,
+                        modifier = Modifier.clip(RoundedCornerShape(10.dp))
+                    ) {
+                        Tab(
+                            selected = !inviteTabActive,
+                            onClick = { inviteTabActive = false },
+                            text = { Text("Thành viên (${members.size})", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                        )
+                        Tab(
+                            selected = inviteTabActive,
+                            onClick = { inviteTabActive = true },
+                            text = { Text("Mời thêm", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp)
+                    ) {
+                        if (!inviteTabActive) {
+                            // Render current members
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(members) { member ->
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp)
+                                    ) {
+                                        UserAvatar(
+                                            avatarUrl = member.avatarUrl,
+                                            size = 36.dp,
+                                            isOnline = member.isOnline,
+                                            showStatus = true
+                                        )
+                                        Column {
+                                            Text(
+                                                text = member.displayName,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White,
+                                                fontSize = 13.sp
+                                            )
+                                            Text(
+                                                text = "@${member.username}",
+                                                color = TextSecondary,
+                                                fontSize = 11.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            // Render candidates you can invite
+                            val nonMembers = allUsers.filter { user -> !members.any { it.id == user.id } && user.id != "system" }
+                            val candidatesToInvite = remember { mutableStateListOf<UserEntity>() }
+
+                            if (nonMembers.isEmpty()) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "Tất cả mọi người đều có mặt.",
+                                        color = TextSecondary,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            } else {
+                                Column(modifier = Modifier.fillMaxSize()) {
+                                    LazyColumn(
+                                        modifier = Modifier.weight(1f),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        items(nonMembers) { candidate ->
+                                            val isSelected = candidatesToInvite.contains(candidate)
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .clickable {
+                                                        if (isSelected) candidatesToInvite.remove(candidate)
+                                                        else candidatesToInvite.add(candidate)
+                                                    }
+                                                    .padding(6.dp)
+                                            ) {
+                                                UserAvatar(
+                                                    avatarUrl = candidate.avatarUrl,
+                                                    size = 34.dp,
+                                                    isOnline = candidate.isOnline,
+                                                    showStatus = true
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = candidate.displayName,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = TextPrimary,
+                                                    fontSize = 12.sp,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                                Checkbox(
+                                                    checked = isSelected,
+                                                    onCheckedChange = {
+                                                        if (isSelected) candidatesToInvite.remove(candidate)
+                                                        else candidatesToInvite.add(candidate)
+                                                    },
+                                                    colors = CheckboxDefaults.colors(
+                                                        checkedColor = AccentCyan,
+                                                        uncheckedColor = DarkBorder
+                                                    ),
+                                                    modifier = Modifier.size(24.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    Button(
+                                        onClick = {
+                                            onInviteMembers(candidatesToInvite.toList())
+                                            candidatesToInvite.clear()
+                                        },
+                                        enabled = candidatesToInvite.isNotEmpty(),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = AccentPurple,
+                                            disabledContainerColor = DarkSurfaceVariant
+                                        ),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(36.dp)
+                                            .padding(top = 4.dp),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text("Mời thành viên đã chọn", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.White)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // Leave Group button
+                    Button(
+                        onClick = {
+                            showGroupDetailsDialog = false
+                            onLeaveGroup()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = ErrorRadical),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.ExitToApp, contentDescription = "Leave", tint = Color.White, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Rời khỏi nhóm trò chuyện", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 13.sp)
                     }
                 }
             }
